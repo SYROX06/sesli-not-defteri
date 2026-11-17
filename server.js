@@ -3,6 +3,20 @@ const fs = require('fs');
 const path = require('path');
 const PORT = 8080;
 const ROOT = __dirname;
+
+// "node server.js --arkaplan": sunucuyu penceresiz ayrı bir işlem olarak başlatır,
+// hazır olunca çıkar (0 = hazır, 1 = açılamadı). Böylece .bat penceresi hemen kapanabilir.
+if (process.argv.includes('--arkaplan')) {
+  const { spawn } = require('child_process');
+  spawn(process.execPath, [__filename], { cwd: __dirname, detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  const t0 = Date.now();
+  const dene = () => {
+    http.get('http://localhost:' + PORT + '/ping', (r) => { r.resume(); process.exit(r.statusCode === 204 ? 0 : 1); })
+      .on('error', () => { if (Date.now() - t0 > 8000) process.exit(1); setTimeout(dene, 200); });
+  };
+  setTimeout(dene, 200);
+  return;
+}
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
 // Her açık pencere kendi kimliğiyle /ping?id=.. atar, kapanırken /bye?id=.. gönderir.
