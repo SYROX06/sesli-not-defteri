@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sesli Not Defteri</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="side-head">
+      <h2>📒 Notlarım</h2>
+      <button id="btnNew" title="Yeni not">＋ Yeni</button>
+    </div>
+    <input id="search" placeholder="Notlarda ara...">
+    <div id="noteList"></div>
+    <div class="side-foot">
+      <small id="storageInfo"></small>
+    </div>
+  </aside>
+
+  <main id="editor-area">
+    <header id="toolbar">
+      <div class="row">
+        <input id="noteTitle" placeholder="Not başlığı..." value="Yeni Not">
+        <button id="themeBtn" title="Tema değiştir">🌙</button>
+      </div>
+
+      <div class="row mic-row">
+        <select id="langSelect" title="Konuşma dili">
+          <option value="tr-TR" selected>🇹🇷 Türkçe</option>
+          <option value="en-US">🇬🇧 English</option>
+        </select>
+        <button id="micBtn" class="mic">🎤 Konuşmaya Başla</button>
+        <span id="micStatus" class="status">hazır</span>
+        <label class="chk"><input type="checkbox" id="cmdChk" checked> Sesli noktalama</label>
+        <label class="chk"><input type="checkbox" id="autoChk" checked> Oto-kaydet</label>
+      </div>
+
+      <div class="row actions">
+        <button id="btnSave">💾 Kaydet</button>
+        <button id="btnCopy">📋 Kopyala</button>
+        <button id="btnClear">🧹 Temizle</button>
+        <button id="btnDelete">🗑️ Sil</button>
+        <span class="spacer"></span>
+        <button id="btnTxt">TXT</button>
+        <button id="btnDocx">DOCX</button>
+        <button id="btnPdf">PDF</button>
+      </div>
+      <div id="livePreview" class="live hidden"></div>
+    </header>
+
+    <textarea id="editor" placeholder="Buraya yazın veya 🎤 butonuna basıp konuşun...&#10;&#10;Sesli komutlar (TR): nokta, virgül, soru işareti, ünlem, yeni satır, yeni paragraf, son kelimeyi sil&#10;(EN): period, comma, question mark, exclamation mark, new line, new paragraph"></textarea>
+
+    <footer id="statusbar">
+      <span id="wordCount">0 kelime</span>
+      <span id="charCount">0 karakter</span>
+      <span id="saveState">kaydedilmedi</span>
+    </footer>
+  </main>
+</div>
+
+<div id="toast"></div>
+<script src="renderer.js"></script>
+</body>
+</html>

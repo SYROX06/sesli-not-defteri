@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sesli Not Defteri</title>
+<link rel="icon" type="image/png" sizes="16x16" href="logo-16.png?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="logo-32.png?v=2">
+<link rel="icon" type="image/png" sizes="48x48" href="logo-48.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="logo-192.png?v=2">
+<link rel="shortcut icon" href="logo.ico?v=2">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4f46e5">
+<script src="https://unpkg.com/docx@9.1.0/build/index.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--bg:#f4f4f5;--panel:#fff;--text:#1a1a1a;--muted:#777;--border:#ddd;--accent:#2563eb;--mic:#dc2626}
+body.dark{--bg:#111318;--panel:#1c1f26;--text:#e8e8e8;--muted:#999;--border:#333a44;--accent:#4f8cff}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:flex;height:100vh}#sidebar{width:280px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:12px;gap:10px}
+.side-head{display:flex;align-items:center;justify-content:space-between}.side-head h2{margin:0;font-size:18px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:.2px;background:linear-gradient(90deg,#7c3aed,#4f46e5 55%,#06b6d4);-webkit-background-clip:text;background-clip:text;color:transparent}.brand img{width:30px;height:30px}
+button{border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px}
+button:hover{border-color:var(--accent)}#search{padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+#noteList{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px}.note-item{padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer}
+.note-item.active{border-color:var(--accent);background:rgba(37,99,235,.08)}.note-item .t{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.note-item .m{font-size:12px;color:var(--muted)}
+#editor-area{flex:1;display:flex;flex-direction:column}#toolbar{padding:12px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#noteTitle{flex:1;font-size:18px;font-weight:700;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);min-width:200px}
+.mic-row select{padding:7px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)}#micBtn{font-weight:700;border-color:var(--mic)}
+#micBtn.listening{background:var(--mic);color:#fff;animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.7}}
+.status{font-size:13px;color:var(--muted)}.status.rec{color:var(--mic);font-weight:700}.chk{font-size:13px;display:flex;gap:4px;align-items:center}
+.spacer{flex:1}#livePreview{font-size:13px;font-style:italic;color:var(--muted);background:var(--bg);border-radius:8px;padding:6px 10px}.hidden{display:none}
+#editor{flex:1;margin:12px;padding:16px;font-family:inherit;font-size:16px;line-height:1.6;border-radius:12px;border:1px solid var(--border);background:var(--panel);color:var(--text);resize:none;outline:none}
+#statusbar{display:flex;gap:16px;padding:8px 16px;font-size:13px;color:var(--muted);border-top:1px solid var(--border);background:var(--panel)}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:.3s;pointer-events:none}#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+<aside id="sidebar">
+<div class="side-head"><h2 class="brand"><img src="logo.svg" alt="">Sesli Not Defteri</h2><button id="btnNew">＋ Yeni</button></div>
+<input id="search" placeholder="Notlarda ara...">
+<div id="noteList"></div>
+<div class="side-foot"><small>Notlar yazarken otomatik kaydedilir</small></div>
+</aside>
+<main id="editor-area">
+<header id="toolbar">
+<div class="row"><input id="noteTitle" value="Yeni Not"><button id="themeBtn">🌙</button></div>
+<div class="row mic-row">
+<select id="langSelect"><option value="tr-TR" selected>🇹🇷 Türkçe</option><option value="en-US">🇬🇧 English</option></select>
+<button id="micBtn">🎤 Tek Cümle</button>
+<button id="autoBtn">🔁 Otomatik: Kapalı</button>
+<span id="micStatus" class="status">hazır</span>
+<span id="levelWrap" title="Mikrofon seviyesi" style="display:inline-block;width:80px;height:8px;background:var(--border);border-radius:4px;overflow:hidden;vertical-align:middle"><span id="level" style="display:block;height:100%;width:0%;background:var(--mic)"></span></span>
+<label class="chk"><input type="checkbox" id="cmdChk" checked> Sesli noktalama</label>
+<label class="chk"><input type="checkbox" id="fixChk" checked title="Konuşma yazıya eklenirken otomatik temizlenir"> Otomatik düzelt</label>
+<label class="chk"><input type="checkbox" id="upperChk" title="Her şey büyük harfle yazılır"> BÜYÜK HARF</label>
+</div>
+<div class="row mic-row">
+<select id="micSelect" title="Mikrofon seç"><option value="">🎙️ Mikrofon: varsayılan</option></select>
+<button id="testBtn" title="Mikrofon çalışıyor mu test et">🔧 Mikrofonu Test Et</button>
+</div>
+<div class="row actions">
+<button id="btnSave">💾 Kaydet</button><button id="btnCopy">📋 Kopyala</button><button id="btnFix" title="Yazım ve noktalama temizliği yap">✨ Düzelt</button>
+<button id="btnClear">🧹 Temizle</button><button id="btnDelete">🗑️ Sil</button>
+<span class="spacer"></span><button id="btnTxt">TXT</button><button id="btnDocx">DOCX</button><button id="btnPdf">PDF</button>
+</div>
+<div id="livePreview" class="live hidden"></div>
+</header>
+<textarea id="editor" placeholder="🎤 butonuna basıp konuşun...&#10;&#10;Sesli komutlar (TR): nokta, virgül, soru işareti, ünlem, yeni satır, yeni paragraf, son kelimeyi sil"></textarea>
+<footer id="statusbar"><span id="wordCount">0 kelime</span><span id="charCount">0 karakter</span><span id="saveState"></span></footer>
+</main>
+</div>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+const editor=$('editor'),noteTitle=$('noteTitle'),noteList=$('noteList');
+const micBtn=$('micBtn'),micStatus=$('micStatus'),livePreview=$('livePreview');
+const langSelect=$('langSelect'),cmdChk=$('cmdChk');
+let currentNote='Yeni Not',recognizing=false,recognition=null;
+let autoWant=false, autoStream=null, audioCtx=null, analyser=null, rafId=null, restartTimer=null;
+const store={
+  all(){try{return JSON.parse(localStorage.getItem('sesli-notlar')||'{}')}catch{return{}}},
+  save(a){localStorage.setItem('sesli-notlar',JSON.stringify(a))},
+  get(n){return this.all()[n]||''},set(n,c){const a=this.all();a[n]=c;this.save(a)},
+  del(n){const a=this.all();delete a[n];this.save(a)},names(){return Object.keys(this.all()).sort((a,b)=>a.localeCompare(b,'tr'))}
+};
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
+function updateCounts(){const t=editor.value;const w=t.trim()?t.trim().split(/\s+/).length:0;$('wordCount').textContent=w+' kelime';$('charCount').textContent=t.length+' karakter'}
+editor.addEventListener('input',updateCounts);
+if(localStorage.getItem('theme')==='dark')document.body.classList.add('dark');
+$('themeBtn').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+$('themeBtn').onclick=()=>{document.body.classList.toggle('dark');const d=document.body.classList.contains('dark');localStorage.setItem('theme',d?'dark':'light');$('themeBtn').textContent=d?'☀️':'🌙'};
+function applyVoiceCommands(text,lang){
+  let s=' '+text+' ';const rep=(p,v)=>{s=s.replace(p,v)};
+  if(lang.startsWith('tr')){
+    rep(/\s+nokta\s+/gi,'. ');rep(/\s+virgül\s+/gi,', ');rep(/\s+soru işareti\s+/gi,'? ');
+    rep(/\s+ünlem(\s+işareti)?\s+/gi,'! ');rep(/\s+iki nokta(\s+üst üste)?\s+/gi,': ');
+    rep(/\s+noktalı virgül\s+/gi,'; ');rep(/\s+aç parantez\s+/gi,' (');rep(/\s+kapa parantez\s+/gi,') ');
+    rep(/\s+yeni paragraf\s+/gi,'\n\n');rep(/\s+yeni satır\s+/gi,'\n');rep(/\s+alt satır\s+/gi,'\n');
+  }else{
+    rep(/\s+period\s+/gi,'. ');rep(/\s+dot\s+/gi,'. ');rep(/\s+comma\s+/gi,', ');
+    rep(/\s+question mark\s+/gi,'? ');rep(/\s+exclamation mark\s+/gi,'! ');
+    rep(/\s+new paragraph\s+/gi,'\n\n');rep(/\s+new line\s+/gi,'\n');
+  }
+  return s.replace(/^[ \t]+|[ \t]+$/g,''); // tek başına "yeni satır" denince \n silinmesin
+}
+function handleDeleteCommand(t,lang){
+  const re=lang.startsWith('tr')?/son kelimeyi sil|son kelime sil/i:/delete last word/i;
+  if(re.test(t)){editor.value=editor.value.replace(/\s*\S+\s*$/,'');updateCounts();scheduleAutosave();return true}return false;
+}
+function supportCheck(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const secure=window.isSecureContext;
+  if(!SR){
+    micStatus.textContent='Bu tarayıcı konuşmayı desteklemiyor — Chrome veya Edge ile http://localhost:8080 adresinden aç';
+    toast('Konuşma yok: Chrome/Edge + localhost gerekli');
+    return null;
+  }
+  if(secure===false){
+    micStatus.textContent='güvensiz adres (file://) — Chrome-ile-Ac.bat ile aç';
+  }
+  return SR;
+}
+// Açılışta destek durumunu göster (butonu kalıcı kapatma)
+(function(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){micStatus.textContent='desteklenmiyor — Chrome/Edge kullan';}
+  else if(window.isSecureContext===false){micStatus.textContent='hazır (uyarı: file:// yerine bat ile aç)';}
+})();
+async function ensureMicPermission(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    toast('Tarayıcı mikrofon API yok — Chrome/Edge + localhost ile aç');
+    return false;
+  }
+  try{
+    const devId=selectedDeviceId();
+    const stream=await navigator.mediaDevices.getUserMedia(devId?{audio:{deviceId:{exact:devId}}}:{audio:true});
+    stream.getTracks().forEach(t=>t.stop());
+    return true;
+  }catch(e){
+    if(e.name==='NotAllowedError')toast('Mikrofon izni ver: adres çubuğundaki kamera/mikrofon simgesi > İzin Ver, sonra tekrar dene');
+    else if(e.name==='NotFoundError'||e.name==='OverconstrainedError')toast('Mikrofon bulunamadı: başka mikrofon seç veya Windows Ayarlar > Ses > Girişten kontrol et');
+    else toast('Mikrofon açılmadı: '+e.name);
+    micStatus.textContent='mikrofon izni/bulunamadı';
+    return false;
+  }
+}
+// --- Mikrofon listesi + test (sorun mic'de mi serviste mi ayırt eder) ---
+function selectedDeviceId(){const s=$('micSelect');return s&&s.value?s.value:''}
+async function listMics(){
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices)return;
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const mics=devs.filter(d=>d.kind==='audioinput');
+    const sel=$('micSelect');const cur=sel.value;
+    sel.innerHTML='<option value="">🎙️ Mikrofon: varsayılan</option>';
+    mics.forEach((m,i)=>{
+      const o=document.createElement('option');o.value=m.deviceId;
+      o.textContent='🎙️ '+(m.label||('Mikrofon '+(i+1)));sel.appendChild(o);
+    });
+    if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
+    if(mics.length===0)micStatus.textContent='mikrofon bulunamadı — cihaz takılı mı?';
+  }catch(e){/* liste alınamazsa varsayılanla devam */}
+}
+async function testMic(){
+  const btn=$('testBtn');btn.disabled=true;
+  try{
+    const devId=selectedDeviceId();
+    const stream=await navigator.mediaDevices.getUserMedia(devId?{audio:{deviceId:{exact:devId}}}:{audio:true});
+    await listMics(); // izin sonrası isimler görünür
+    const AC=window.AudioContext||window.webkitAudioContext;
+    const ctx=new AC();const src=ctx.createMediaStreamSource(stream);
+    const an=ctx.createAnalyser();an.fftSize=1024;src.connect(an);
+    const buf=new Uint8Array(an.fftSize);let peak=0;const t0=Date.now();
+    micStatus.textContent='test: konuş... (5 sn)';
+    await new Promise(res=>{
+      const iv=setInterval(()=>{
+        an.getByteTimeDomainData(buf);
+        let sum=0;for(let i=0;i<buf.length;i++){const v=(buf[i]-128)/128;sum+=v*v}
+        const rms=Math.sqrt(sum/buf.length);peak=Math.max(peak,rms);
+        $('level').style.width=Math.min(100,Math.round(rms*400))+'%';
+        if(Date.now()-t0>5000){clearInterval(iv);res()}
+      },100);
+    });
+    stream.getTracks().forEach(t=>t.stop());ctx.close();$('level').style.width='0%';
+    if(peak>0.02){micStatus.textContent='hazır';toast('Mikrofon çalışıyor ✅ (seviye: %'+Math.round(peak*100)+') — sorun yok, konuşmaya başlayabilirsin')}
+    else{micStatus.textContent='ses alınamadı';toast('Mikrofon sessiz ❌: başka mikrofon seç, ses seviyesini aç, başka programı kapat')}
+  }catch(e){
+    if(e.name==='NotAllowedError')toast('Mikrofon izni ver: adres çubuğu > İzin Ver');
+    else if(e.name==='NotFoundError'||e.name==='OverconstrainedError')toast('Mikrofon bulunamadı: cihaz takılı değil ya da başka program kullanıyor');
+    else toast('Test hatası: '+e.name);
+  }
+  btn.disabled=false;
+}
+if(navigator.mediaDevices&&navigator.mediaDevices.addEventListener){navigator.mediaDevices.addEventListener('devicechange',listMics)}
+listMics();
+$('testBtn').onclick=testMic;
+// --- Otomatik düzeltme: noktalama boşlukları, cümle başı büyük harf, dolgu sesleri ---
+function duzeltMetin(t,capFirst=true){
+  if(!t) return t;
+  let s=String(t).replace(/\r/g,'');
+  s=s.replace(/(?<![\p{L}\p{N}])(e{3,}|ı{3,}|hm{2,}|m{3,}|a{3,})(?![\p{L}\p{N}])/giu,''); // konuşma dolgu sesleri
+  s=s.replace(/\s+([.,;:!?…%‰])/g,'$1');                 // noktalama öncesi boşluk sil
+  s=s.replace(/([.,;:!?…])(?=\p{L})/gu,'$1 ');                 // noktalama sonrası boşluk (yalnız harften önce: '...' ve '3.5' bozulmaz)
+  s=s.replace(/\(\s+/g,'(').replace(/\s+\)/g,')');       // parantez içi boşluklar
+  s=s.replace(/[ \t]+/g,' ');                            // çoklu boşluk
+  s=s.replace(/\n{3,}/g,'\n\n');
+  s=s.split('\n').map(l=>l.trim()).join('\n').replace(/^ +| +$/g,'');
+  s=s.replace(/([.!?…]\s+|\n)([a-zçğıöşü])/g,(m,p,c)=>p+c.toLocaleUpperCase('tr')); // cümle başı büyüt
+  if(capFirst)s=s.replace(/^([a-zçğıöşü])/,c=>c.toLocaleUpperCase('tr'));
+  return s;
+}
+function buyukHarf(s){const u=document.getElementById('upperChk');return (u&&u.checked)?s.toLocaleUpperCase('tr-TR'):s}
+function commitText(raw, lang){
+  if(!raw) return;
+  if(handleDeleteCommand(raw, lang)) return;
+  let out=cmdChk.checked?applyVoiceCommands(raw, lang):raw;
+  // Konuşma parça parça gelir: sadece yeni cümle başında büyük harf, araya doğru boşluk
+  const before=editor.value.slice(0,editor.selectionStart??editor.value.length);
+  const capFirst=!before.trim()||/[.!?…]\s*$|\n\s*$/.test(before);
+  const fx=$('fixChk');
+  if(fx&&fx.checked)out=duzeltMetin(out,capFirst);
+  out=buyukHarf(out);
+  if(!out) return;
+  if(/^[.,;:!?…)]/.test(out)){ // "nokta" vb. tek başına: önceki boşluğu yut ("kelime ." olmasın)
+    let p=editor.selectionStart??editor.value.length;
+    while(p>0&&editor.value[p-1]===' ')p--;
+    editor.selectionStart=p;
+    insertAtCursor(editor,out);updateCounts();scheduleAutosave();return;
+  }
+  const sep=(before&&!/\s$/.test(before)&&!/^[\s.,;:!?…)]/.test(out))?' ':'';
+  insertAtCursor(editor,sep+out);
+  updateCounts();scheduleAutosave();
+}
+// --- Otomatik mod: ses seviyesi çubuğu (VAD göstergesi) ---
+function startLevelMeter(stream){
+  stopLevelMeter();
+  try{
+    audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended')audioCtx.resume();
+    const src=audioCtx.createMediaStreamSource(stream);
+    analyser=audioCtx.createAnalyser();analyser.fftSize=1024;src.connect(analyser);
+    const buf=new Uint8Array(analyser.fftSize);
+    const levelEl=$('level');
+    const loop=()=>{
+      if(!autoWant){levelEl.style.width='0%';return}
+      analyser.getByteTimeDomainData(buf);
+      let sum=0;for(let i=0;i<buf.length;i++){const v=(buf[i]-128)/128;sum+=v*v}
+      const rms=Math.sqrt(sum/buf.length);
+      const pct=Math.min(100,Math.round(rms*400));
+      levelEl.style.width=pct+'%';
+      micStatus.textContent=rms>0.02?'konuşuyorsun... yazıyorum':'sessizlik bekleniyor... konuş';
+      rafId=requestAnimationFrame(loop);
+    };
+    loop();
+  }catch(e){/* seviye çubuğu olmazsa da devam */}
+}
+function stopLevelMeter(){if(rafId)cancelAnimationFrame(rafId);rafId=null;const l=$('level');if(l)l.style.width='0%'}
+// Otomatik mod: konuşma servisi mikrofonu ÖNCE alır; seviye çubuğu sonra açılır.
+// (Eskiden önce getUserMedia ile mikrofon tutuluyordu; bazı Windows sürücülerinde
+//  konuşma servisi mikrofonu alamıyor, buton "Kapalı"da kalıyor ve ses gitmiyordu.)
+let autoFails=0, autoMeterOff=false, autoStarted=false, autoBusy=false, stoppingRec=null, autoSession=0;
+function setAutoUi(state){
+  const b=$('autoBtn');
+  if(state==='on'){b.textContent='⏹ Otomatik: Açık (durdur)';b.classList.add('listening');micStatus.classList.add('rec')}
+  else if(state==='starting'){b.textContent='⏳ Otomatik: açılıyor...';b.classList.add('listening')}
+  else{b.textContent='🔁 Otomatik: Kapalı';b.classList.remove('listening');micStatus.classList.remove('rec')}
+}
+function autoErrorText(err){
+  return {
+    'not-allowed':'Mikrofon izni yok: pencerenin sol üstündeki simge > Site ayarları > Mikrofon: İzin Ver',
+    'service-not-allowed':'Konuşma servisine izin yok: Chrome ayarlarında mikrofon iznini aç',
+    'audio-capture':'Mikrofon alınamadı: takılı mı, başka program (Discord/Zoom/Teams) kullanıyor mu?',
+    'network':'İnternet gerekli: konuşma Google servisiyle yazıya çevrilir',
+    'language-not-supported':'Bu dil desteklenmiyor'
+  }[err]||('Mikrofon hatası: '+err);
+}
+async function openAutoMeter(){
+  if(autoStream||autoMeterOff||!autoWant)return;
+  try{
+    const devId=selectedDeviceId();
+    const s=await navigator.mediaDevices.getUserMedia(devId?{audio:{deviceId:{exact:devId}}}:{audio:true});
+    if(!autoWant){s.getTracks().forEach(t=>t.stop());return}
+    autoStream=s;startLevelMeter(s);
+  }catch(e){/* seviye çubuğu olmadan da yazmaya devam */}
+}
+function closeAutoMeter(){stopLevelMeter();if(autoStream){autoStream.getTracks().forEach(t=>t.stop());autoStream=null}}
+function scheduleAutoRestart(ms){clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(autoWant)startAutoRecognition()},ms)}
+function startAutoRecognition(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR||!autoWant)return;
+  const rec=new SR();recognition=rec;
+  rec.lang=langSelect.value;rec.interimResults=true;rec.continuous=true;
+  const myLang=langSelect.value;
+  let fatal=false;
+  rec.onstart=()=>{
+    if(recognition!==rec)return;
+    recognizing=true;autoStarted=true;setAutoUi('on');
+    livePreview.classList.remove('hidden');
+    if(!rafId)micStatus.textContent='dinleniyor... konuş';
+    openAutoMeter();
+  };
+  rec.onresult=(e)=>{
+    if(recognition!==rec&&stoppingRec!==rec)return; // durdururken son cümle de yazılsın
+    autoFails=0;
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=e.results[i][0].transcript;
+      if(e.results[i].isFinal)commitText(t.trim(),myLang);
+      else interim+=t;
+    }
+    livePreview.textContent=interim||'dinleniyor...';
+  };
+  rec.onerror=(e)=>{
+    if(recognition!==rec)return;
+    if(e.error==='no-speech'||e.error==='aborted')return; // sessizlikte normal: yeniden başlar
+    if(e.error==='audio-capture'&&autoStream){
+      // mikrofonu seviye çubuğu tutuyor olabilir: çubuğu kapatıp tekrar dene
+      autoMeterOff=true;closeAutoMeter();micStatus.textContent='mikrofon paylaşılamadı, seviye çubuğu kapatıldı...';return;
+    }
+    if(e.error==='network'){autoFails++;micStatus.textContent='bağlantı koptu, tekrar deneniyor... ('+autoFails+')';if(autoFails<5)return}
+    fatal=true;toast(autoErrorText(e.error));stopAuto(true);micStatus.textContent='hata: '+e.error;
+  };
+  rec.onend=()=>{
+    if(recognition!==rec)return;
+    recognizing=false;
+    if(autoWant&&!fatal)scheduleAutoRestart(autoFails?1500:250);
+  };
+  try{rec.start()}catch(err){
+    autoFails++;
+    if(autoFails>=5){toast('Otomatik başlatılamadı: '+(err&&err.message||err));stopAuto(true);return}
+    scheduleAutoRestart(800);
+  }
+}
+async function startAuto(){
+  const SR=supportCheck();if(!SR)return;
+  // Tek Cümle hâlâ çalışıyorsa önce onu kapat (aynı anda iki tanıma başlamaz)
+  if(recognition){try{recognition.abort()}catch{}recognition=null;recognizing=false;micBtn.textContent='🎤 Tek Cümle';micBtn.classList.remove('listening')}
+  setAutoUi('starting');micStatus.textContent='mikrofon kontrol ediliyor...';
+  const ok=await ensureMicPermission();
+  if(!ok){setAutoUi('off');return}
+  autoWant=true;autoFails=0;autoMeterOff=false;autoStarted=false;
+  livePreview.classList.remove('hidden');livePreview.textContent='otomatik dinleme açılıyor...';
+  const sess=++autoSession;
+  startAutoRecognition();
+  // 6 sn içinde servis başlamazsa kullanıcıya söyle (sessizce beklemesin)
+  setTimeout(()=>{if(autoWant&&!autoStarted&&sess===autoSession){toast('Konuşma servisi başlamadı: internet bağlantısını ve mikrofon iznini kontrol et');stopAuto(true)}},6000);
+  toast('Otomatik açık: konuş, susunca yazı eklenecek');
+}
+function stopAuto(hemen){
+  autoWant=false;clearTimeout(restartTimer);
+  const rec=recognition;recognition=null;
+  if(rec){
+    if(hemen){try{rec.abort()}catch{}}
+    else{stoppingRec=rec;try{rec.stop()}catch{}setTimeout(()=>{if(stoppingRec===rec){try{rec.abort()}catch{}stoppingRec=null}},2000)}
+  }
+  recognizing=false;
+  closeAutoMeter();
+  setAutoUi('off');
+  micStatus.textContent='hazır';
+  livePreview.classList.add('hidden');
+}
+$('autoBtn').onclick=async()=>{
+  if(autoWant){stopAuto();return}
+  if(autoBusy)return; // izin beklenirken ikinci tık yeni oturum açmasın
+  autoBusy=true;try{await startAuto()}finally{autoBusy=false}
+};
+micBtn.onclick=async()=>{
+  if(autoWant)stopAuto(true); // tek cümle moduna geçerken otomatiği kapat
+  if(recognizing){try{recognition.stop()}catch{}return}
+  const SR=supportCheck();if(!SR)return;
+  micBtn.disabled=true;micStatus.textContent='mikrofon kontrol ediliyor...';
+  const ok=await ensureMicPermission();
+  micBtn.disabled=false;
+  if(!ok)return;
+  recognition=new SR();recognition.lang=langSelect.value;recognition.interimResults=true;recognition.continuous=false;
+  const myLang=langSelect.value;
+  let finalText='';
+  recognition.onstart=()=>{recognizing=true;micBtn.textContent='⏹ Durdur';micBtn.classList.add('listening');micStatus.textContent='dinleniyor... konuşun';micStatus.classList.add('rec');livePreview.classList.remove('hidden');livePreview.textContent='dinleniyor...'};
+  recognition.onresult=(e)=>{let interim='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)finalText+=t+' ';else interim+=t}livePreview.textContent=(finalText+interim)||'dinleniyor...'};
+  recognition.onerror=(e)=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed')toast('Mikrofon izni ver: adres çubuğu > site ayarları > Mikrofon: İzin Ver');
+    else if(e.error==='audio-capture')toast('Mikrofon başka programda kullanılıyor ya da takılı değil — Zoom/Teams/Discord kapatıp tekrar dene');
+    else if(e.error==='network')toast('İnternet gerekli: bağlantını kontrol et (konuşma Google servisiyle çalışır)');
+    else if(e.error==='no-speech')toast('Ses duyulmadı: mikrofona yaklaşıp tekrar dene');
+    else toast('Mikrofon hatası: '+e.error);
+    micStatus.textContent='hata: '+e.error;
+  };
+  recognition.onend=()=>{
+    const raw=(finalText.trim()||'').trim();
+    if(raw)commitText(raw,myLang);
+    recognizing=false;micBtn.textContent='🎤 Tek Cümle';micBtn.classList.remove('listening');micStatus.textContent='hazır';micStatus.classList.remove('rec');setTimeout(()=>livePreview.classList.add('hidden'),800);
+  };
+  try{recognition.start()}catch(err){toast(String(err))}
+};
+function insertAtCursor(el,text){const s=el.selectionStart??el.value.length,e=el.selectionEnd??el.value.length;el.value=el.value.slice(0,s)+text+el.value.slice(e);el.selectionStart=el.selectionEnd=s+text.length;el.focus()}
+// --- Notlar: otomatik kayıt (pencere kapanınca yazı kaybolmasın) ---
+let autosaveTimer=null;
+function setSaved(){$('saveState').textContent='kayıtlı ✓ '+new Date().toLocaleTimeString('tr-TR')}
+function flushSave(){
+  clearTimeout(autosaveTimer);autosaveTimer=null;
+  // hiç kaydedilmemiş boş not listeyi kirletmesin
+  if(!editor.value&&!(currentNote in store.all())){$('saveState').textContent='';return}
+  if(store.get(currentNote)===editor.value&&(currentNote in store.all())){setSaved();return}
+  store.set(currentNote,editor.value);setSaved();refreshList($('search').value);
+}
+function scheduleAutosave(){clearTimeout(autosaveTimer);$('saveState').textContent='kaydediliyor...';autosaveTimer=setTimeout(flushSave,800)}
+editor.addEventListener('input',scheduleAutosave);
+addEventListener('pagehide',flushSave);
+addEventListener('beforeunload',flushSave);
+function openNote(n){flushSave();currentNote=n;noteTitle.value=n;editor.value=store.get(n);updateCounts();$('saveState').textContent='';refreshList($('search').value)}
+function renameNote(oldN,newN){
+  newN=(newN||'').trim();
+  if(!newN||newN===oldN)return oldN;
+  const all=store.all();
+  if(newN in all){toast('"'+newN+'" adında bir not zaten var');return oldN}
+  if(oldN in all){all[newN]=all[oldN];delete all[oldN];store.save(all)}
+  if(currentNote===oldN){currentNote=newN;noteTitle.value=newN}
+  refreshList($('search').value);toast('Adı değişti: '+newN);
+  return newN;
+}
+// Başlık kutusu değişince mevcut notun adı değişir (eskiden kaydedince ikinci kopya oluşuyordu)
+noteTitle.addEventListener('change',()=>{flushSave();const r=renameNote(currentNote,noteTitle.value);noteTitle.value=r});
+noteTitle.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();editor.focus()}});
+function refreshList(filter=''){
+  noteList.innerHTML='';
+  store.names().filter(n=>n.toLocaleLowerCase('tr').includes(filter.toLocaleLowerCase('tr'))).forEach(n=>{
+    const d=document.createElement('div');d.className='note-item'+(n===currentNote?' active':'');
+    d.innerHTML='<div class="t"></div><div class="m"></div>';d.querySelector('.t').textContent=n;
+    d.querySelector('.m').textContent=(store.get(n)||'').slice(0,60);
+    d.onclick=()=>{if(n!==currentNote)openNote(n)};
+    d.ondblclick=()=>{const nn=prompt('Yeni isim:',n);if(nn!==null){flushSave();renameNote(n,nn)}};
+    noteList.appendChild(d);
+  });
+}
+function fileBase(){return (noteTitle.value.trim()||'not').replace(/[\\/:*?"<>|]/g,'-')}
+// Dosyayı nereye kaydedeceğini sor (uygulama penceresinde sessizce İndirilenler'e gitmesin)
+async function saveBlob(name,blob,desc,mime,ext){
+  if(window.showSaveFilePicker){
+    try{
+      const h=await showSaveFilePicker({suggestedName:name,types:[{description:desc,accept:{[mime]:[ext]}}]});
+      const w=await h.createWritable();await w.write(blob);await w.close();
+      toast('Kaydedildi: '+h.name);return;
+    }catch(e){if(e.name==='AbortError')return}
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+  toast('İndirilenler klasörüne kaydedildi');
+}
+$('btnFix').onclick=()=>{const once=editor.value;editor.value=buyukHarf(duzeltMetin(once));updateCounts();if(once!==editor.value)scheduleAutosave();toast(once===editor.value?'Değişiklik yok — metin zaten temiz':'Metin düzeltildi ✨')};
+$('btnSave').onclick=()=>{renameNote(currentNote,noteTitle.value);noteTitle.value=currentNote;clearTimeout(autosaveTimer);store.set(currentNote,editor.value);setSaved();refreshList($('search').value);toast('Kaydedildi')};
+addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();$('btnSave').click()}});
+function freeName(base){const all=store.all();if(!(base in all))return base;let i=2;while((base+' '+i) in all)i++;return base+' '+i}
+$('btnNew').onclick=()=>{flushSave();currentNote=freeName('Yeni Not');noteTitle.value=currentNote;editor.value='';updateCounts();$('saveState').textContent='';refreshList($('search').value);editor.focus()};
+$('btnCopy').onclick=async()=>{try{await navigator.clipboard.writeText(editor.value);toast('Kopyalandı')}catch(e){toast('Kopyalanamadı: '+e.name)}};
+$('btnClear').onclick=()=>{if(confirm('Temizlensin mi?')){editor.value='';updateCounts();scheduleAutosave()}};
+$('btnDelete').onclick=()=>{if(confirm('"'+currentNote+'" silinsin mi?')){clearTimeout(autosaveTimer);store.del(currentNote);currentNote=freeName('Yeni Not');noteTitle.value=currentNote;editor.value='';updateCounts();$('saveState').textContent='';refreshList($('search').value);toast('Silindi')}};
+$('search').oninput=e=>refreshList(e.target.value);
+$('btnTxt').onclick=()=>saveBlob(fileBase()+'.txt',new Blob([editor.value],{type:'text/plain;charset=utf-8'}),'Metin','text/plain','.txt');
+$('btnDocx').onclick=async()=>{
+  try{
+    if(!window.docx)throw new Error('DOCX kütüphanesi yüklenemedi (internet?)');
+    const {Document,Packer,Paragraph,TextRun}=docx;
+    const paras=String(editor.value).split(/\n/).map(l=>new Paragraph({children:[new TextRun(l||' ')]}));
+    const doc=new Document({sections:[{children:paras.length?paras:[new Paragraph('')]}]});
+    const blob=await Packer.toBlob(doc);
+    await saveBlob(fileBase()+'.docx',blob,'Word','application/vnd.openxmlformats-officedocument.wordprocessingml.document','.docx');
+  }catch(e){toast('DOCX hatası: '+e.message)}
+};
+// jsPDF'in hazır fontunda ğ/ş/ı/İ yok; Windows'un Arial fontu sunucudan alınır
+let pdfFont=null;
+async function loadPdfFont(){
+  if(pdfFont)return pdfFont;
+  const r=await fetch('/font.ttf');if(!r.ok)throw new Error('font alınamadı');
+  const b=new Uint8Array(await r.arrayBuffer());let s='';
+  for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));
+  return pdfFont=btoa(s);
+}
+async function buildPdf(){
+  if(!window.jspdf)throw new Error('PDF kütüphanesi yüklenemedi (internet?)');
+  const {jsPDF}=window.jspdf;const doc=new jsPDF();
+  try{doc.addFileToVFS('arial.ttf',await loadPdfFont());doc.addFont('arial.ttf','Arial','normal');doc.setFont('Arial','normal')}
+  catch(e){doc.setFont('helvetica','normal');toast('Türkçe font yüklenemedi, karakterler bozuk çıkabilir')}
+  doc.setFontSize(12);
+  const lines=doc.splitTextToSize(editor.value||' ',180);
+  const lineH=6,top=15,bottom=doc.internal.pageSize.getHeight()-15;let y=top;
+  for(const ln of lines){if(y>bottom){doc.addPage();y=top}doc.text(ln,15,y);y+=lineH}
+  return doc;
+}
+$('btnPdf').onclick=async()=>{
+  try{const doc=await buildPdf();await saveBlob(fileBase()+'.pdf',doc.output('blob'),'PDF','application/pdf','.pdf')}
+  catch(e){toast('PDF hatası: '+e.message)}
+};
+// ilk açılış: en son açık notu geri getir
+try{currentNote=localStorage.getItem('son-not')||'Yeni Not'}catch{}
+if(!(currentNote in store.all()))currentNote='Yeni Not';
+noteTitle.value=currentNote;editor.value=store.get(currentNote)||'';refreshList();updateCounts();
+setInterval(()=>{try{localStorage.setItem('son-not',currentNote)}catch{}},1000);
+</script>
+<script>
+// Uygulama modu: sunucuya "pencere açık" sinyali; kapanınca sunucu kendini kapatır (bkz. server.js)
+const pencereId=Math.random().toString(36).slice(2);
+const pingAt=()=>fetch("/ping?id="+pencereId).catch(()=>{});
+pingAt();setInterval(pingAt,5000);
+addEventListener("pagehide",()=>navigator.sendBeacon("/bye?id="+pencereId));
+</script>
+</body>
+</html>

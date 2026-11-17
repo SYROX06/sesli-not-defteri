@@ -1,0 +1,16 @@
+{
+  "name": "sesli-not-defteri",
+  "version": "1.0.0",
+  "description": "Mikrofonla konuş - Not Defteri'ne yazılsın",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "dependencies": {
+    "docx": "^9.1.0"
+  }
+}
